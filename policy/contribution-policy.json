@@ -1,0 +1,64 @@
+{
+    "version": "1.0",
+    "name": "CirclePay Weekly Contribution",
+    "chain_type": "ethereum",
+    "rules": [
+      {
+        "name": "Allow only the savings-circle contract",
+        "method": "eth_sendTransaction",
+        "action": "ALLOW",
+        "conditions": [
+          {
+            "field_source": "ethereum_transaction",
+            "field": "to",
+            "operator": "eq",
+            "value": "0x0000000000000000000000000000000000000001"
+          },
+          {
+            "field_source": "ethereum_transaction",
+            "field": "chain_id",
+            "operator": "eq",
+            "value": "84532"
+          },
+          {
+            "field_source": "ethereum_transaction",
+            "field": "value",
+            "operator": "lte",
+            "value": "1000000000000000"
+          },
+          {
+            "field_source": "ethereum_calldata",
+            "field": "function_name",
+            "operator": "eq",
+            "value": "contribute",
+            "abi": [
+              {
+                "type": "function",
+                "name": "contribute",
+                "stateMutability": "payable",
+                "inputs": [
+                  {
+                    "name": "period",
+                    "type": "uint256"
+                  }
+                ],
+                "outputs": []
+              }
+            ]
+          },
+          {
+            "field_source": "system",
+            "field": "current_unix_timestamp",
+            "operator": "lt",
+            "value": "1798675200"
+          }
+        ]
+      },
+      {
+        "name": "Never allow private key export",
+        "method": "exportPrivateKey",
+        "action": "DENY",
+        "conditions": []
+      }
+    ]
+  }

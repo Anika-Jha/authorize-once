@@ -1,36 +1,136 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Authorize Once
 
-## Getting Started
+Weekly savings-circle contributions with scoped, revocable Privy wallet authorization.
 
-First, run the development server:
+Built for **Road To Devcon III — Authorize Once, Then Stop Asking**.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## What it does
+
+A member authorizes the CirclePay server once when joining.
+
+That authorization allows the server to make the member's weekly contribution while the member is offline.
+
+The permission is:
+
+- Base Sepolia only
+- `SavingsCircle` contract only
+- `contribute()` only
+- Maximum `0.001 ETH` per transaction
+- Expires 31 December 2026
+- Revocable by the member
+
+The server cannot use the authorization key to perform arbitrary wallet actions.
+
+## Architecture
+
+```text
+Member
+  │
+  │  one-time authorization
+  ▼
+Privy embedded wallet
+  │
+  │  scoped signer + policy
+  ▼
+Privy authorization key
+  │
+  ▼
+Weekly scheduler
+  │
+  ├── already settled?
+  │       └── skip
+  │
+  └── send contribution
+          │
+          ▼
+     Privy policy engine
+          │
+          ├── contract ✓
+          ├── Base Sepolia ✓
+          ├── amount ≤ 0.001 ETH ✓
+          ├── contribute() ✓
+          └── before expiry ✓
+                  │
+                  ▼
+           SavingsCircle
+```
+## Safety
+
+The permission is enforced by Privy's policy engine rather than application checks alone.
+
+The committed policy restricts:
+
+-   destination contract
+-   network
+-   transaction value
+-   contract function
+-   expiry
+
+The policy is allow-only, so unmatched wallet actions remain denied.
+
+Members can revoke the delegated signer from the product at any time.
+
+## Idempotency
+
+Each contribution is identified by:
+
+```
+wallet + weekly period
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The server records the period before execution and uses a deterministic Privy idempotency key:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+circle-contribution:<walletId>:<period>
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The on-chain contract also rejects duplicate contributions for the same member and period.
 
-## Learn More
+## Setup
 
-To learn more about Next.js, take a look at the following resources:
+Install:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+npm install
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Configure `.env.local` using `.env.example`.
 
-## Deploy on Vercel
+Create a Privy authorization key and register it in the Privy Dashboard.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Deploy `SavingsCircle.sol` to Base Sepolia with:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+0.001 ETH
+```
+
+Create the Privy policy using:
+
+```
+npx tsx scripts/create-policy.ts
+```
+
+Put the resulting policy ID and authorization signer ID in `.env.local`.
+
+Run:
+
+```
+npm run dev
+```
+
+The weekly job can be tested locally with:
+
+```
+curl -X POST http://localhost:3000/api/weekly-run \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+## Security boundary
+
+The authorization private key is server-only and is never committed.
+
+`.env.local` and runtime state are gitignored.
+
+The member's wallet remains under their control; the application receives only the scoped transaction authority explicitly granted through Privy.
+
+The result is a contribution flow that works in the background without turning a weekly savings commitment into an unlimited wallet permission. Members authorize once, retain visibility and control, and can revoke access when they choose.
