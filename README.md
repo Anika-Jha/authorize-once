@@ -54,6 +54,20 @@ Weekly scheduler
                   ▼
            SavingsCircle
 ```
+
+## Demo
+
+The flow is:
+
+1. Connect a Privy wallet.
+2. Join the savings circle.
+3. Authorize the weekly contribution once.
+4. The server can execute future weekly contributions without requiring the member to be online.
+5. The member can revoke the authorization at any time.
+
+The weekly contribution endpoint can also be triggered manually for testing.
+
+
 ## Safety
 
 The permission is enforced by Privy's policy engine rather than application checks alone.
@@ -134,3 +148,20 @@ The authorization private key is server-only and is never committed.
 The member's wallet remains under their control; the application receives only the scoped transaction authority explicitly granted through Privy.
 
 The result is a contribution flow that works in the background without turning a weekly savings commitment into an unlimited wallet permission. Members authorize once, retain visibility and control, and can revoke access when they choose.
+
+## Key Design Decision
+
+The application does not store or control the member's wallet private key.
+
+Instead, the member explicitly delegates a narrowly scoped authorization through Privy. The server can use that authorization only for the permitted weekly contribution flow.
+
+This separates **wallet ownership** from **transaction execution**: the member retains control while the application handles recurring execution.
+
+## Tech Stack
+
+- Next.js + TypeScript
+- Privy Wallets & Authorization
+- Solidity + Foundry
+- Base Sepolia
+- Vercel Cron
+- viem
